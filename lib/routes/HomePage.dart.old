@@ -1,0 +1,411 @@
+import 'package:downcer/common/Global.dart';
+import 'package:downcer/common/Method.dart';
+import 'package:downcer/routes/index.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color primaryColor = Theme.of(context).primaryColor;
+
+    return Scaffold(
+      drawer: const Drawer(
+        width: 260,
+        child: LeftMenu(),
+      ),
+      appBar: AppBar(
+        leading: Builder(builder: (context) {
+          return IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () {
+              Scaffold.of(context).openDrawer();
+            },);
+          },
+        ),
+        title: const Text('Downcer'),
+        backgroundColor: primaryColor,
+        centerTitle: true,
+      ),
+      body: const HomeWidget(),
+    );
+  }
+}
+
+class HomeWidget extends StatefulWidget {
+  const HomeWidget({super.key});
+
+  @override
+  State<HomeWidget> createState() => _HomeWidgetState();
+}
+
+class _HomeWidgetState extends State<HomeWidget> {
+  String responseText = "返回信息";
+  String postDate = "2022-12-06";
+  String postTime = "00:00:00";
+  String inSchool = Global.profile.user!.inschool ? "在校" : "不在校";
+  String postWhere = "填报地点";
+  String errorText = "错误信息";
+  int status = 0;
+  bool buttonStatus = true;
+
+  @override
+  Widget build(BuildContext context) {
+    if(status == -1) {
+      LoginFunction.getStatus(context).then((value) {
+        if (value == -1) {
+          setState(() {
+            status = 2;
+            buttonStatus = false;
+            errorText = "网络错误，请连接校园网或学校VPN";
+          });
+        } else if (value == 1) {
+          String timeNow = DateTime.now().toString().substring(0, 10);
+          if (Global.profile.user!.lastPostDate == timeNow) {
+            setState(() {
+              status = 1;
+              buttonStatus = false;
+              responseText = Global.profile.user!.lastResponseText!;
+              postDate = Global.profile.user!.lastPostDate;
+              postTime = Global.profile.user!.lastPostTime!;
+              inSchool = Global.profile.user!.lastInSchool! ? "在校" : "不在校";
+              postWhere = Global.profile.user!.lastPostWhere!;
+            });
+          } else {
+            setState(() {
+              status = 1;
+              buttonStatus = false;
+              responseText = "未从APP填报，无法获取信息";
+              postDate = timeNow;
+              postTime = "未从APP填报，无法获取信息";
+              inSchool = "未从APP填报，无法获取信息";
+              postWhere = "未从APP填报，无法获取信息";
+            });
+          }
+        } else if (value == 0) {
+          setState(() {
+            status = 0;
+            buttonStatus = true;
+          });
+        }
+      });
+    }
+    return homeBody();
+  }
+
+  Widget button() {
+    return ElevatedButton(
+      onPressed: () {
+        Global.profile = Global.profile.copyWith(isLogin: false, user: null);
+        Global.saveProfile();
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+              (route) => route == null
+        );
+      },
+      child: const Text('退出登录'),
+    );
+  }
+
+  Widget homeBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        bodyTop(),
+        const SizedBox(height: 20),
+        bodyBottom()
+      ],
+    );
+  }
+
+  Widget bodyTop() {
+    return SizedBox(
+      height: 240,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.only(top:40),
+          child: Container(
+            width: 120,
+            height: 120,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+                stops: [0.0, 1.0],
+                colors: [Color(0xFFE2B0FF), Color(0xFF9F44D3)]
+              ),
+              borderRadius: BorderRadius.all(
+                Radius.circular(60)
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  offset: Offset(0.0, 0.0),
+                  blurRadius: 15.0,
+                  spreadRadius: 2.0
+                )
+              ]
+            ),
+            child: ElevatedButton(
+              onPressed: () {
+                runScript();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                elevation: 0,
+                shape: const CircleBorder(),
+              ),
+              child: const Text(
+                '一键填报',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold
+                ),
+              ),
+            ),
+          )
+        ),
+      ),
+    );
+  }
+
+  Widget bodyBottom() {
+    return Container(
+      margin: const EdgeInsets.only(left: 30, right: 30),
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(4.0)),
+        border: Border.all(width: 2, color: Theme.of(context).primaryColor),
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(20),
+        child: Column(children: responseContent(status))
+      ),
+    );
+  }
+
+  List<Widget> responseContent(int status) {
+    if (status == 0) { return [responseTitle("今日未填报", 0)]; }
+    else if (status == -1) { return [responseTitle("载入信息中......", -1)]; }
+    else if (status == 1) {
+      return [
+        responseTitle("今日已填报", 1),
+        const SizedBox(height: 20),
+        responseContentItem("填报结果", responseText),
+        const SizedBox(height: 4),
+        responseContentItem("填报日期", postDate),
+        const SizedBox(height: 4),
+        responseContentItem("填报时间", postTime),
+        const SizedBox(height: 4),
+        responseContentItem("是否在校", inSchool),
+        const SizedBox(height: 4),
+        responseContentItem("填报位置", postWhere)
+      ];
+    } else {
+      return [
+        responseTitle("出错啦", 2),
+        const SizedBox(height: 20),
+        responseContentItem("错误信息", errorText),
+      ];
+    }
+  }
+
+  Widget responseTitle(String title, int status) {
+    Color color;
+    String icon;
+    if (status == 0) {
+      color = Theme.of(context).primaryColor;
+      icon = 'nothing';
+    } else if (status == -1) {
+      color = Theme.of(context).primaryColor;
+      icon = 'tired';
+    } else if (status == 1) {
+      color = Colors.green.shade400;
+      icon = 'happy';
+    } else {
+      color = Colors.red.shade400;
+      icon = 'poisoning';
+    }
+    return Row(
+      children: [
+        SvgPicture.asset(
+          "assets/images/$icon.svg",
+          width: 30.0,
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(
+            color: color,
+            fontSize: 24,
+            fontWeight: FontWeight.bold
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget responseContentItem(String title, String content) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: Theme.of(context).primaryColor,
+            fontSize: 18,
+            fontWeight: FontWeight.bold
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                content,
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        )
+      ],
+    );
+  }
+
+  void runScript() {
+    if (buttonStatus) {
+      // setState(() {
+      //   buttonStatus = false;
+      // });
+      EasyLoading.show(status: '填报中...');
+      DailyRem.runRem().then((res) {
+        print(res);
+      });
+      EasyLoading.dismiss();
+    }
+  }
+
+
+}
+
+class LeftMenu extends StatefulWidget {
+  const LeftMenu({super.key});
+
+  @override
+  State<LeftMenu> createState() => _LeftMenuState();
+}
+
+class _LeftMenuState extends State<LeftMenu> {
+  final String id = Global.profile.user!.id;
+  final String name = Global.profile.user!.name;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color primaryColor = Theme.of(context).primaryColor;
+    return Column(
+      children: [
+        drawerHeader(primaryColor),
+        drawerBody(primaryColor, context),
+      ]
+    );
+  }
+
+  Widget drawerHeader(Color primaryColor) {
+    return Container(
+      height: 180,
+      color: primaryColor,
+      child: Center(
+        child:  Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 60),
+            drawerText(name),
+            const SizedBox(height: 8, width: 220),
+            drawerText(id)
+          ]
+        ),
+      ),
+    );
+  }
+
+  Widget drawerText(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: Colors.white
+      ),
+    );
+  }
+
+  Widget drawerBody(Color primaryColor, BuildContext context) {
+    return Expanded(
+      child: ListView(
+        children: [
+          ListTile(
+            leading: Icon(
+              Icons.settings,
+              size: 28,
+              color: primaryColor
+            ),
+            title: Align(
+              alignment: const Alignment(-1.2, 0),
+              child: Text(
+                '设置        ',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: primaryColor
+                ),
+              ),
+            ),
+            dense: true,
+            onTap: () {
+              
+            },
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.logout,
+              size: 28,
+              color: primaryColor
+            ),
+            title: Align(
+              alignment: const Alignment(-1.2, 0),
+              child: Text(
+                '退出登录',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: primaryColor
+                ),
+              ),
+            ),
+            dense: true,
+            onTap: () {
+              Global.profile = Global.profile.copyWith(isLogin: false, user: null);
+              Global.saveProfile();
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+                    (route) => route == null
+              );
+            },
+          )
+        ],
+      ),
+    );
+  }
+}

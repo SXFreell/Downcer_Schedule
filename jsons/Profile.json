@@ -1,0 +1,7 @@
+{
+    "user?": "$User",
+    "password?": "",
+    "lastLoginId?": "",
+    "isLogin": false,
+    "userList?": "$[]User"
+}
